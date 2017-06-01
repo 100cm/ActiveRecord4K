@@ -7,7 +7,12 @@ import com.zaxxer.hikari.HikariDataSource
 import com.zaxxer.hikari.HikariConfig
 import entity.Column
 import java.sql.ResultSet
+import javax.lang.model.type.DeclaredType
+import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KProperty
+import kotlin.reflect.declaredMemberProperties
+import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.memberProperties
 
 
 /**
@@ -23,6 +28,8 @@ open class ActiveRecord<T> {
     var conn: HikariDataSource = HikariDataSource();
 
     var results: List<T>? = listOf();
+
+    var bind_args:List<Any> = listOf();
 
     init {
         val config = HikariConfig()
@@ -40,12 +47,30 @@ open class ActiveRecord<T> {
     }
 
 
-    fun where(key: String, value: Any?): T {
+    fun where(vararg args: Any?): T {
 
-        this.wheres = this.wheres.plusElement(Where(key, value))
 
+        if (args[0] is Map<*, *>) {
+            (args[0] as Map<*, *>).forEach {
+                this.wheres = this.wheres.plusElement(Where(it.key.toString(), it.value))
+
+            }
+
+        } else {
+            var w = Where()
+            w.sql = args[0].toString()
+
+            var nest_args = args.drop(1)
+
+            w.bindArgs = w.bindArgs.plus(nest_args)
+
+            this.wheres = this.wheres.plusElement(w)
+        }
+
+//
         return this as T;
     }
+
 
     fun select(columns: List<String>): T {
         this.selects = this.selects.plus(columns)
@@ -76,12 +101,37 @@ open class ActiveRecord<T> {
         return this as T;
     }
 
-    operator fun get(index: Int) {
+    operator fun get(index: Int): T {
         var dataResult: List<T> = listOf()
 
         //先拿到result
         var sql = SqlBuilder().selectSQl(this as ActiveRecord<Any>)
-        var result: ResultSet = this.conn.connection.prepareStatement(sql).executeQuery()
+
+        var prepareStatement  = this.conn.connection.prepareStatement(sql)
+
+        println(this.bind_args)
+
+        print(sql)
+
+        this.bind_args.forEachIndexed { index, any ->
+
+            when(any){
+                Int -> {
+                    prepareStatement.setInt(index+1,any as Int)
+                }
+
+                String ->{
+                    prepareStatement.setString(index+1,any as String)
+                }
+                else->{
+                    prepareStatement.setString(index+1,any as String)
+                }
+            }
+
+        }
+
+
+        var result: ResultSet = prepareStatement.executeQuery()
 
         var names = this.javaClass.declaredFields.map {
             it.name
@@ -93,19 +143,20 @@ open class ActiveRecord<T> {
             it.split("$")[0]
         }
 
-        columns.forEach {
-
-            var column_index = result.findColumn(it)
+        while (result.next()) {
 
             var clazz = this.javaClass
 
             var record = clazz.newInstance()
 
-            var field = clazz.getDeclaredField(it + "$" + "delegate")
+            columns.forEach {
 
-            field.isAccessible = true
+                var current_column = it
 
-            if (result.next()) {
+                var field = clazz.getDeclaredField(it + "$" + "delegate")
+
+                field.isAccessible = true
+
 
                 var this_filed = field.get(this)
 
@@ -122,28 +173,34 @@ open class ActiveRecord<T> {
 
                 when (column_type) {
                     String.javaClass -> {
-                        column_value = result.getString(column_index)
+                        column_value = result.getString(it)
                     }
 
                     Int.javaClass -> {
-                        column_value = result.getString(column_index)
+                        column_value = result.getString(it)
                     }
 
                 }
 
-                var column = Column();
 
-                
-                column.setValue(record,field as KProperty<*>,column_value)
+                var kproperties = record.javaClass.kotlin.declaredMemberProperties
 
-                field.set(record, column)
-                print(record)
+                val property = kproperties.find { it.name == current_column }
+                if (property is KMutableProperty<*>) {
+                    println("it worked")
+                    property.setter.call(record, column_value)
+                }
 
-
+//                setter.invoke(record, column_value)
             }
 
 
+            dataResult = dataResult.plusElement(record as T)
+
+
         }
+
+        return dataResult[index];
 
 
     }

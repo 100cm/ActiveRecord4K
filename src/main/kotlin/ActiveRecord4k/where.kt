@@ -5,4 +5,10 @@ package ActiveRecord4k
  */
 data class  Where(var column_name:String = "",var column_value:Any? = null) {
 
+    var sql = "";
+
+    var bindArgs:List<Any?> = listOf();
+
+
+
 }
