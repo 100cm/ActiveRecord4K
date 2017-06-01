@@ -7,7 +7,8 @@ import entity.Column
  */
 class User : ActiveRecord<User>() {
 
-    var name by Column();
+    var name by Column(String.javaClass);
 
+    var id by Column(Int.javaClass);
 
 }

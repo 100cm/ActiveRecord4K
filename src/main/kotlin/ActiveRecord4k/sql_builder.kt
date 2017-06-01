@@ -15,7 +15,7 @@ class SqlBuilder {
     fun selectSQl(record: ActiveRecord<Any>):String {
 
 //        找到select
-        var select_sql = "select users.name from ${record::class.java.simpleName.toLowerCase()}s "
+        var select_sql = "select * from ${record::class.java.simpleName.toLowerCase()}s "
 
         print(select_sql)
 
