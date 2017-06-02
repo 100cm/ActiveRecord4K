@@ -55,10 +55,10 @@ open class ActiveRecord<T> {
                     has_many::class -> {
                         var rel = Relation()
                         current_annotation = (current_annotation as has_many)
-                        rel.relation_type =  RelationType().HAS_MANY
+                        rel.relation_type = RelationType().HAS_MANY
                         rel.base_class = "${self_class.simpleName?.toLowerCase()}"
                         rel.target_class = "${current_annotation.table.simpleName?.toLowerCase()}s"
-                        rel.target_column =  "${self_class.simpleName?.toLowerCase()}_${current_annotation.base}"
+                        rel.target_column = "${self_class.simpleName?.toLowerCase()}_${current_annotation.base}"
                         self.associations = self.associations.plusElement(rel)
 
                     }
@@ -136,12 +136,12 @@ open class ActiveRecord<T> {
 //            复数 has_many
             if (it.endsWith("s")) {
                 relation_type = RelationType().HAS_MANY;
-            }else{
+            } else {
                 target_table += "s"
             }
 
             //找到关联
-            var relation:Relation? = this.associations.find {
+            var relation: Relation? = this.associations.find {
                 (it.base_class == this::class.simpleName?.toLowerCase() && it.target_class == current_join && it.relation_type == relation_type)
             }
 
@@ -260,6 +260,13 @@ open class ActiveRecord<T> {
         return dataResult[index];
 
 
+    }
+
+
+     infix fun  getElement(int: Int): T {
+        var t = Teacher()
+        t.name = "asd"
+        return t as T;
     }
 
 

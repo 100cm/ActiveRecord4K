@@ -1,5 +1,6 @@
 package ActiveRecord4k
 
+import ActiveRecord4k.ActiveRecord
 
 fun main(args: Array<String>) {
 
@@ -10,9 +11,9 @@ fun main(args: Array<String>) {
 
 
 
-    println(a[0].teachers)
+    b[0].teachers[0] getElement 12
 
-    println(b[0].name)
+    println(b[0].teachers)
 
 
 

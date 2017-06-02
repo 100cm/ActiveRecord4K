@@ -2,6 +2,7 @@ package ActiveRecord4k
 
 import anotation.belongs_to
 import anotation.has_many
+import association.LazyLoad
 import entity.Column
 import kotlin.reflect.KProperty
 
@@ -15,9 +16,9 @@ class User : ActiveRecord<User>() {
     var id by Column(Int.javaClass);
 
     @has_many(Teacher::class)
-    var teachers:List<Teacher> = listOf();
+    var teachers :List<Teacher> = listOf();
 
     @belongs_to(Teacher::class)
-    var teacher:Teacher =Teacher();
+    var teacher :Teacher? = null
 
 }
