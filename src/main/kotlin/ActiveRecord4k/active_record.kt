@@ -1,18 +1,15 @@
 package ActiveRecord4k
 
-import java.util.jar.Pack200.Packer.PASS
-import com.sun.deploy.security.CertStore.USER
-import org.sql2o.Sql2o
+import anotation.belongs_to
+import anotation.has_many
+import association.Relation
+import association.RelationType
 import com.zaxxer.hikari.HikariDataSource
 import com.zaxxer.hikari.HikariConfig
-import entity.Column
+import org.apache.log4j.Logger
 import java.sql.ResultSet
-import javax.lang.model.type.DeclaredType
-import kotlin.reflect.KMutableProperty
-import kotlin.reflect.KProperty
-import kotlin.reflect.declaredMemberProperties
+import kotlin.reflect.*
 import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.memberProperties
 
 
 /**
@@ -29,32 +26,84 @@ open class ActiveRecord<T> {
 
     var results: List<T>? = listOf();
 
-    var bind_args:List<Any> = listOf();
+    var bind_args: List<Any?> = listOf();
+
+    val logger = Logger.getLogger(ActiveRecord::class.java)
+
+    var associations: List<Relation> = listOf();
 
     init {
+
+        /**
+         * 扫描所有注解 并且关联关系加入
+         */
+        var self = this;
+
+        var self_class = this::class
+
+        var init_properties = self_class.declaredMemberProperties
+
+        init_properties.forEach {
+
+            var prop_annotations = it.annotations
+
+            prop_annotations.forEach {
+
+                var current_annotation = it
+
+                when (it.annotationClass) {
+                    has_many::class -> {
+                        var rel = Relation()
+                        current_annotation = (current_annotation as has_many)
+                        rel.relation_type =  RelationType().HAS_MANY
+                        rel.base_class = "${self_class.simpleName?.toLowerCase()}"
+                        rel.target_class = "${current_annotation.table.simpleName?.toLowerCase()}s"
+                        rel.target_column =  "${self_class.simpleName?.toLowerCase()}_${current_annotation.base}"
+                        self.associations = self.associations.plusElement(rel)
+
+                    }
+                    belongs_to::class -> {
+                        var current_annotation = (current_annotation as belongs_to)
+                        var rel = Relation()
+                        rel.relation_type = RelationType().BELONGS_TO
+                        rel.base_class = "${self_class.simpleName?.toLowerCase()}"
+                        rel.target_class = "${current_annotation.table.simpleName?.toLowerCase()}"
+                        rel.base_column = "${current_annotation.table.simpleName?.toLowerCase()}_${current_annotation.target}"
+                        self.associations = self.associations.plusElement(rel)
+                    }
+
+                }
+            }
+
+        }
+
+
         val config = HikariConfig()
-        config.jdbcUrl = "jdbc:mysql://localhost:3306/demo"
+        config.jdbcUrl = "jdbc:mysql://localhost:3306/demo?useSSL=false"
         config.username = "root"
         config.password = "atyun123456"
         config.addDataSourceProperty("cachePrepStmts", "true")
         config.addDataSourceProperty("prepStmtCacheSize", "250")
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
-
         val ds = HikariDataSource(config)
+
 
         this.conn = ds
 
     }
 
 
-    fun where(vararg args: Any?): T {
+    fun where(vararg args: Any): T {
 
+        this.bind_args = listOf();
 
-        if (args[0] is Map<*, *>) {
-            (args[0] as Map<*, *>).forEach {
-                this.wheres = this.wheres.plusElement(Where(it.key.toString(), it.value))
+        if (args[0] !is String) {
 
+            args.forEach {
+                var pair = (it as Pair<String, *>)
+                this.wheres = this.wheres.plusElement(Where(pair.first, pair.second))
             }
+
 
         } else {
             var w = Where()
@@ -67,6 +116,7 @@ open class ActiveRecord<T> {
             this.wheres = this.wheres.plusElement(w)
         }
 
+
 //
         return this as T;
     }
@@ -77,22 +127,36 @@ open class ActiveRecord<T> {
         return this as T
     }
 
-    fun join(table: Any?, sql: Any? = null): T {
+    fun joins(vararg args: String): T {
+        args.forEach {
 
-        var table = table?.javaClass.toString()
+            var current_join = it;
+            var relation_type = RelationType().BELONGS_TO
+            var target_table = it
+//            复数 has_many
+            if (it.endsWith("s")) {
+                relation_type = RelationType().HAS_MANY;
+            }else{
+                target_table += "s"
+            }
 
-        var current_table = this.javaClass.toString().toLowerCase()
+            //找到关联
+            var relation:Relation? = this.associations.find {
+                (it.base_class == this::class.simpleName?.toLowerCase() && it.target_class == current_join && it.relation_type == relation_type)
+            }
 
-        when (table) {
-            is String -> table = table
+            if (relation == null) {
+                throw Exception("Association named ${it} was not found on ${this::class.simpleName} perhaps you misspelled it?")
+            }
+            /**
+             * build join sql
+             */
+            var join_sql = "INNER JOIN `${target_table}` ON " +
+                    " `${relation.base_class}s`.${relation.base_column} = `${target_table}`.${relation.target_column} "
+
+            this.joins = this.joins.plusElement(Join(join_sql))
+
         }
-
-        val table_name = "${current_table}s"
-        var target_table = "${table}s";
-        var table_column = "${current_table}_id";
-        var target_table_column = "${table}_id"
-        this.joins = this.joins.plusElement(Join(table_name, target_table, table_column, target_table_column))
-
         return this as T;
     }
 
@@ -107,24 +171,23 @@ open class ActiveRecord<T> {
         //先拿到result
         var sql = SqlBuilder().selectSQl(this as ActiveRecord<Any>)
 
-        var prepareStatement  = this.conn.connection.prepareStatement(sql)
+        logger.info("execute SQL ->  ${sql} ,${this.bind_args}")
 
-        println(this.bind_args)
+        var prepareStatement = this.conn.connection.prepareStatement(sql)
 
-        print(sql)
 
         this.bind_args.forEachIndexed { index, any ->
 
-            when(any){
+            when (any) {
                 Int -> {
-                    prepareStatement.setInt(index+1,any as Int)
+                    prepareStatement.setInt(index + 1, any as Int)
                 }
 
-                String ->{
-                    prepareStatement.setString(index+1,any as String)
+                String -> {
+                    prepareStatement.setString(index + 1, any as String)
                 }
-                else->{
-                    prepareStatement.setString(index+1,any as String)
+                else -> {
+                    prepareStatement.setString(index + 1, any as String)
                 }
             }
 
@@ -187,17 +250,11 @@ open class ActiveRecord<T> {
 
                 val property = kproperties.find { it.name == current_column }
                 if (property is KMutableProperty<*>) {
-                    println("it worked")
                     property.setter.call(record, column_value)
                 }
 
-//                setter.invoke(record, column_value)
             }
-
-
             dataResult = dataResult.plusElement(record as T)
-
-
         }
 
         return dataResult[index];

@@ -1,0 +1,1 @@
+2017-06-02 09:56:52 INFO  ActiveRecord:113 - execute SQL ->  select * from users where name = ?   ,[测试]

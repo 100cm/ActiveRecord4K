@@ -5,4 +5,6 @@ package ActiveRecord4k
  */
 class Teacher : ActiveRecord<Teacher>() {
 
+
+
 }
