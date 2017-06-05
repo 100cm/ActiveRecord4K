@@ -7,9 +7,14 @@ import association.RelationType
 import com.zaxxer.hikari.HikariDataSource
 import com.zaxxer.hikari.HikariConfig
 import org.apache.log4j.Logger
+import type.ActiveList
 import java.sql.ResultSet
 import kotlin.reflect.*
+import kotlin.reflect.full.createInstance
 import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.full.declaredMembers
+import kotlin.reflect.jvm.isAccessible
+import kotlin.reflect.jvm.kotlinProperty
 
 
 /**
@@ -18,6 +23,7 @@ import kotlin.reflect.full.declaredMemberProperties
 open class ActiveRecord<T> {
 
     var joins: List<Join> = listOf()
+
     var wheres: List<Where> = listOf();
 
     var selects: List<String> = listOf();
@@ -31,6 +37,10 @@ open class ActiveRecord<T> {
     val logger = Logger.getLogger(ActiveRecord::class.java)
 
     var associations: List<Relation> = listOf();
+
+    var limit: String? = null
+
+    var is_list: Boolean = true
 
     init {
 
@@ -73,6 +83,8 @@ open class ActiveRecord<T> {
                     }
 
                 }
+
+
             }
 
         }
@@ -81,7 +93,7 @@ open class ActiveRecord<T> {
         val config = HikariConfig()
         config.jdbcUrl = "jdbc:mysql://localhost:3306/demo?useSSL=false"
         config.username = "root"
-        config.password = "atyun123456"
+        config.password = "root"
         config.addDataSourceProperty("cachePrepStmts", "true")
         config.addDataSourceProperty("prepStmtCacheSize", "250")
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
@@ -107,6 +119,7 @@ open class ActiveRecord<T> {
 
         } else {
             var w = Where()
+
             w.sql = args[0].toString()
 
             var nest_args = args.drop(1)
@@ -165,11 +178,15 @@ open class ActiveRecord<T> {
         return this as T;
     }
 
-    operator fun get(index: Int): T {
+    operator fun get(index: Int): T? {
         var dataResult: List<T> = listOf()
+
+        var base_table = "${this.javaClass.simpleName.toLowerCase()}s"
 
         //先拿到result
         var sql = SqlBuilder().selectSQl(this as ActiveRecord<Any>)
+
+
 
         logger.info("execute SQL ->  ${sql} ,${this.bind_args}")
 
@@ -178,12 +195,12 @@ open class ActiveRecord<T> {
 
         this.bind_args.forEachIndexed { index, any ->
 
-            when (any) {
-                Int -> {
+            when (any!!::class) {
+                Int::class -> {
                     prepareStatement.setInt(index + 1, any as Int)
                 }
 
-                String -> {
+                String::class -> {
                     prepareStatement.setString(index + 1, any as String)
                 }
                 else -> {
@@ -192,7 +209,6 @@ open class ActiveRecord<T> {
             }
 
         }
-
 
         var result: ResultSet = prepareStatement.executeQuery()
 
@@ -211,6 +227,7 @@ open class ActiveRecord<T> {
             var clazz = this.javaClass
 
             var record = clazz.newInstance()
+
 
             columns.forEach {
 
@@ -235,17 +252,15 @@ open class ActiveRecord<T> {
                 var column_value = ""
 
                 when (column_type) {
-                    String.javaClass -> {
+                    String::class-> {
                         column_value = result.getString(it)
                     }
 
-                    Int.javaClass -> {
+                    Int::class -> {
                         column_value = result.getString(it)
                     }
 
                 }
-
-
                 var kproperties = record.javaClass.kotlin.declaredMemberProperties
 
                 val property = kproperties.find { it.name == current_column }
@@ -253,21 +268,79 @@ open class ActiveRecord<T> {
                     property.setter.call(record, column_value)
                 }
 
+                var _lazy_list = kproperties.filter {
+                    it.annotations.filter {
+                        (it.annotationClass == has_many::class || it.annotationClass == belongs_to::class)
+                    }.size > 0
+                }
+
+                _lazy_list.forEach {
+                    it.isAccessible = true
+                    var annotation = it.annotations.first()
+                    when (it.annotations.map { it.annotationClass }.first()) {
+
+                        has_many::class -> {
+                            var join_table = (annotation as has_many).table
+                            var join_column = (annotation as has_many).table
+                            var target = join_table.simpleName?.toLowerCase()
+                            var target_column = annotation.target
+                            var base_column = annotation.base
+
+                            if (it is KMutableProperty<*>) {
+                                it.setter.call(record, ActiveList(emptyList(), "build lazy sql"))
+                            }
+
+
+                        }
+                        belongs_to::class -> {
+                            var join_table = (annotation as belongs_to).table
+                            var join_column = (annotation as belongs_to).table
+                            var target = join_table.simpleName?.toLowerCase()
+                            var target_column = annotation.target
+                            var base_column = annotation.base
+                            if (it is KMutableProperty<*>) {
+                                var set_obj = join_table.createInstance() as ActiveRecord<Any>
+
+                                var joins = listOf<Join>(Join(join_sql = "INNER JOIN `${base_table}` ON  `${base_table}`.${target_column} = " +
+                                        " `${target}s`.${base_column}"))
+
+                                var wheres = listOf<Where>(Where())
+
+                                set_obj.joins = joins
+
+                                set_obj.is_list = false
+
+                                it.setter.call(record, set_obj)
+                            }
+                        }
+                    }
+
+                }
+
+
             }
+            /**
+             * 赋予lazy join 语句
+             */
+
+
             dataResult = dataResult.plusElement(record as T)
         }
 
-        return dataResult[index];
+        if(dataResult.size <= 0){
+            return null
+        } else{
+            return dataResult[index];
+        }
+
+
 
 
     }
 
 
-     infix fun  getElement(int: Int): T {
-        var t = Teacher()
-        t.name = "asd"
-        return t as T;
-    }
+    fun all() {
 
+    }
 
 }

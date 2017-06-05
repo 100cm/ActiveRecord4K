@@ -62,13 +62,11 @@ class SqlBuilder {
             record.joins.forEachIndexed {index,join ->
                 join_sql += join.join_sql
 
+
             }
-
-
 
             select_sql = select_sql.replace("#{join}",join_sql)
         }
-
         return select_sql
 
     }

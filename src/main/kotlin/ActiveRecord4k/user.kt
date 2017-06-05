@@ -4,6 +4,7 @@ import anotation.belongs_to
 import anotation.has_many
 import association.LazyLoad
 import entity.Column
+import type.ActiveList
 import kotlin.reflect.KProperty
 
 /**
@@ -11,14 +12,14 @@ import kotlin.reflect.KProperty
  */
 class User : ActiveRecord<User>() {
 
-    var name by Column(String.javaClass);
+    var name by Column(String::class);
 
-    var id by Column(Int.javaClass);
+    var id by Column(Int::class);
 
     @has_many(Teacher::class)
-    var teachers :List<Teacher> = listOf();
+    var teachers :List<Teacher> = ActiveList();
 
     @belongs_to(Teacher::class)
-    var teacher :Teacher? = null
+    var teacher :Teacher = Teacher()
 
 }
