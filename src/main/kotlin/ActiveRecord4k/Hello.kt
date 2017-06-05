@@ -1,19 +1,17 @@
 package ActiveRecord4k
 
-import ActiveRecord4k.ActiveRecord
-
-
 fun main(args: Array<String>) {
 
-    val a = User().where("name = ? ", "测试").joins("teachers")
 
-    val b = User().where("name like ?", "测试").where("id" to "1")
+    var config = ActiveRecordConfig(jdbcUrl = "jdbc:mysql://localhost:3306/demo?useSSL=false", username = "root", password = "atyun123456")
 
 
-    val aa = b[0]?.teacher?.where("name" to "teacher", "id" to 1)!![0]?.users!![0]?.name
+    var teachers = User().where("name" to "2b")[0]!!.teachers
 
-    print(aa)
 
+    var aa = teachers.all()
 
 }
+
+
 

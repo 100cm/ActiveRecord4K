@@ -13,7 +13,7 @@ class Teacher : ActiveRecord<Teacher>() {
 
     var id by Column(Int::class)
 
-    @has_many(User::class)
+    @has_many(User::class,base="id",target="teacher_id")
     var users:List<User> = ActiveList()
 
 }

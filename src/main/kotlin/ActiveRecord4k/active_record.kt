@@ -8,6 +8,7 @@ import com.zaxxer.hikari.HikariDataSource
 import com.zaxxer.hikari.HikariConfig
 import org.apache.log4j.Logger
 import type.ActiveList
+import type.ActiveRecordBase
 import java.sql.ResultSet
 import kotlin.reflect.*
 import kotlin.reflect.full.createInstance
@@ -89,18 +90,7 @@ open class ActiveRecord<T> {
 
         }
 
-
-        val config = HikariConfig()
-        config.jdbcUrl = "jdbc:mysql://localhost:3306/demo?useSSL=false"
-        config.username = "root"
-        config.password = "root"
-        config.addDataSourceProperty("cachePrepStmts", "true")
-        config.addDataSourceProperty("prepStmtCacheSize", "250")
-        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
-        val ds = HikariDataSource(config)
-
-
-        this.conn = ds
+        this.conn = ActiveRecordConfig.database
 
     }
 
@@ -179,6 +169,20 @@ open class ActiveRecord<T> {
     }
 
     operator fun get(index: Int): T? {
+
+        var dataResult = this.all()
+
+        if (dataResult.size <= 0) {
+            return null
+        } else {
+            return dataResult[index];
+        }
+
+
+    }
+
+
+    fun all(): List<T> {
         var dataResult: List<T> = listOf()
 
         var base_table = "${this.javaClass.simpleName.toLowerCase()}s"
@@ -195,13 +199,13 @@ open class ActiveRecord<T> {
 
         this.bind_args.forEachIndexed { index, any ->
 
-            when (any!!::class) {
-                Int::class -> {
-                    prepareStatement.setInt(index + 1, any as Int)
+            when (any) {
+                is Int -> {
+                    prepareStatement.setInt(index + 1, any)
                 }
 
-                String::class -> {
-                    prepareStatement.setString(index + 1, any as String)
+                is String -> {
+                    prepareStatement.setString(index + 1, any)
                 }
                 else -> {
                     prepareStatement.setString(index + 1, any as String)
@@ -228,6 +232,7 @@ open class ActiveRecord<T> {
 
             var record = clazz.newInstance()
 
+            var id = result.getInt("id")
 
             columns.forEach {
 
@@ -252,7 +257,7 @@ open class ActiveRecord<T> {
                 var column_value = ""
 
                 when (column_type) {
-                    String::class-> {
+                    String::class -> {
                         column_value = result.getString(it)
                     }
 
@@ -281,20 +286,26 @@ open class ActiveRecord<T> {
 
                         has_many::class -> {
                             var join_table = (annotation as has_many).table
-                            var join_column = (annotation as has_many).table
                             var target = join_table.simpleName?.toLowerCase()
                             var target_column = annotation.target
                             var base_column = annotation.base
 
+                            var list = join_table.createInstance() as ActiveRecord<Any>
+
+                            var joins = listOf<Join>(Join(join_sql = "INNER JOIN `${base_table}` ON  `${base_table}`.${base_column} = " +
+                                    " `${target}s`.${base_table.dropLast(1)}_${target_column}"))
+
+                            list.where("`${base_table}`.id = ?", id)
+
+                            list.joins = joins
                             if (it is KMutableProperty<*>) {
-                                it.setter.call(record, ActiveList(emptyList(), "build lazy sql"))
+                                it.setter.call(record, ActiveList(emptyList(), list))
                             }
 
 
                         }
                         belongs_to::class -> {
                             var join_table = (annotation as belongs_to).table
-                            var join_column = (annotation as belongs_to).table
                             var target = join_table.simpleName?.toLowerCase()
                             var target_column = annotation.target
                             var base_column = annotation.base
@@ -327,20 +338,7 @@ open class ActiveRecord<T> {
             dataResult = dataResult.plusElement(record as T)
         }
 
-        if(dataResult.size <= 0){
-            return null
-        } else{
-            return dataResult[index];
-        }
-
-
-
-
-    }
-
-
-    fun all() {
-
+        return dataResult
     }
 
 }

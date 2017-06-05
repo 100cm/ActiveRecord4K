@@ -17,7 +17,7 @@ class SqlBuilder {
         var table_name = "`${record::class.java.simpleName.toLowerCase()}s`"
 
 //        找到select
-        var select_sql = "select #{select} from ${table_name} #{join}  #{where} "
+        var select_sql = "select #{select} from ${table_name} #{join}  #{where} #{limit} "
 
 
         if (record.selects.isEmpty()) {
@@ -67,6 +67,17 @@ class SqlBuilder {
 
             select_sql = select_sql.replace("#{join}",join_sql)
         }
+
+        /**
+         * 处理limit
+         */
+
+        if(record.limit.isNullOrEmpty()){
+            select_sql = select_sql.replace("#{limit}","")
+        }else{
+            select_sql = select_sql.replace("#{limit}","${record.limit}")
+        }
+
         return select_sql
 
     }
