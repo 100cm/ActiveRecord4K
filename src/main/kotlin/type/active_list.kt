@@ -2,6 +2,7 @@ package type
 
 import ActiveRecord4k.ActiveRecord
 import anotation.lazy_list
+import java.util.function.Consumer
 
 
 /**
@@ -22,5 +23,8 @@ class ActiveList<out T : ActiveRecord<*>>(private val list: List<T> = emptyList(
     fun all():List<T>{
         return lazy_obj?.all() as List<T>
     }
+
+
+
 
 }

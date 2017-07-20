@@ -35,7 +35,7 @@ class SqlBuilder {
 
                 //判断是否原生sql
                 if (where.sql.isBlank()) {
-                    where_state += "${table_name}.${where.column_name} = ?"
+                    where_state += "${table_name}.${where.column_name} ${where.operator} ?"
                     record.bind_args = record.bind_args.plusElement(where.column_value)
                 } else {
                     //直接转成sql

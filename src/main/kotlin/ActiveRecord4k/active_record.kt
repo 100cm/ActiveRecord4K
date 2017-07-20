@@ -5,17 +5,13 @@ import anotation.has_many
 import association.Relation
 import association.RelationType
 import com.zaxxer.hikari.HikariDataSource
-import com.zaxxer.hikari.HikariConfig
 import org.apache.log4j.Logger
 import type.ActiveList
-import type.ActiveRecordBase
 import java.sql.ResultSet
 import kotlin.reflect.*
 import kotlin.reflect.full.createInstance
 import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.full.declaredMembers
 import kotlin.reflect.jvm.isAccessible
-import kotlin.reflect.jvm.kotlinProperty
 
 
 /**
@@ -42,6 +38,9 @@ open class ActiveRecord<T> {
     var limit: String? = null
 
     var is_list: Boolean = true
+
+    var save:SaveObject = SaveObject(listOf())
+
 
     init {
 
@@ -82,15 +81,25 @@ open class ActiveRecord<T> {
                         rel.base_column = "${current_annotation.table.simpleName?.toLowerCase()}_${current_annotation.target}"
                         self.associations = self.associations.plusElement(rel)
                     }
-
                 }
-
-
             }
 
         }
 
         this.conn = ActiveRecordConfig.database
+
+    }
+
+    fun save() {
+
+        var names = this.javaClass.declaredFields.filter {
+            it.name != "$$" + "delegatedProperties" && it.name.contains("$" + "delegate")
+        }
+
+        names.forEach{
+            it.get(this)
+        }
+
 
     }
 
@@ -100,13 +109,10 @@ open class ActiveRecord<T> {
         this.bind_args = listOf();
 
         if (args[0] !is String) {
-
             args.forEach {
                 var pair = (it as Pair<String, *>)
                 this.wheres = this.wheres.plusElement(Where(pair.first, pair.second))
             }
-
-
         } else {
             var w = Where()
 
@@ -132,7 +138,6 @@ open class ActiveRecord<T> {
 
     fun joins(vararg args: String): T {
         args.forEach {
-
             var current_join = it;
             var relation_type = RelationType().BELONGS_TO
             var target_table = it
@@ -164,8 +169,47 @@ open class ActiveRecord<T> {
     }
 
     fun find(id: Int?): T {
+        this.limit = "limit 1"
+        this.is_list = false
+        this.wheres = listOf(Where("id", id))
+        return this[0] as T
+    }
 
+    fun not(vararg args: Any): T {
+        this.bind_args = listOf();
+
+        if (args[0] !is String) {
+
+            args.forEach {
+                var pair = (it as Pair<String, *>)
+                var _wh = Where(pair.first, pair.second)
+                _wh.operator = "!="
+                this.wheres = this.wheres.plusElement(_wh)
+            }
+
+
+        } else {
+            var w = Where()
+
+            w.sql = args[0].toString()
+
+            var nest_args = args.drop(1)
+
+            w.bindArgs = w.bindArgs.plus(nest_args)
+
+            this.wheres = this.wheres.plusElement(w)
+        }
+
+
+//
         return this as T;
+    }
+
+    fun findBy(column: String, value: Any): T {
+        this.limit = "limit 1"
+        this.is_list = false
+        this.wheres = listOf(Where(column, value))
+        return this[0] as T
     }
 
     operator fun get(index: Int): T? {
@@ -340,5 +384,6 @@ open class ActiveRecord<T> {
 
         return dataResult
     }
+
 
 }
